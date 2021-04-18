@@ -146,7 +146,7 @@ def simulation_3_devaluation():
 
 def simulation_4(trials_list,repetitions,omission=False, devaluation=False, VI = None, VR = None):
     #in Variable ration(VR) schedule: the probability of receiving a reinforcer is constant after each lever press
-    U = [0,1,-1]
+    U = [0.1,1,-1]
     trials_test = 500
     
     worlds = [[] for i in range(len(trials_list))]
@@ -156,7 +156,10 @@ def simulation_4(trials_list,repetitions,omission=False, devaluation=False, VI =
         environment = env.environment_free_operant(trials)
         worlds_same_train_duration = []
         for i in range(repetitions):
-            print('simulation 4(VR):  ' + str(i+1)+'/'+str(repetitions))
+            if VR != None:
+                print('simulation 4(VR):  ' + str(i+1)+'/'+str(repetitions))
+            else:
+                print('simulation 4(VI):  ' + str(i+1)+'/'+str(repetitions))
             runs = agent.sim_Free_Operant_second(trials=trials,environment=environment)
             #runs = agent.sim_Free_Operant_minute(trials=trials,environment=environment)
             for t in range(trials):
@@ -168,29 +171,36 @@ def simulation_4(trials_list,repetitions,omission=False, devaluation=False, VI =
 #worlds_VR = simulation_4_VR()
 #anal.plot_4(worlds_VR, repetitions = 2) 
 
-
-def simulation_4_VI(omission=False, devaluation=False):
-    #in Variable interval(VI) schedule: reinforcers are 'baited' at vaiable intervals, and the fisrt press following baiting will lead to a reinforcer 
-    U = [0.,1.0,-1.0]
-    VI = 6
-    repetitions = 10
-    trials =10000   
-    environment = env.environment_free_operant(trials)
+def simulation_4_min(trials_list,repetitions,omission=False, devaluation=False, VI = None, VR = None):
+    #in Variable ration(VR) schedule: the probability of receiving a reinforcer is constant after each lever press
+    U = [-1,1]
+    trials_test = 500
     
-    worlds = []
-    for i in range(repetitions):
-        print('simulation 4(VI):  ' + str(i+1)+'/'+str(repetitions))
-        runs = agent.sim_Free_Operant_second(trials=trials,environment=environment)
-        for t in range(trials):
-            runs.run_agent(U,t,VI=VI)
-        worlds.append(runs)        
-    return worlds    
+    worlds = [[] for i in range(len(trials_list))]
+    for n,trials in enumerate(trials_list):
+        if omission or devaluation:
+            trials = trials+trials_test
+        environment = env.environment_free_operant(trials)
+        worlds_same_train_duration = []
+        for i in range(repetitions):
+            if VR != None:
+                print('simulation 4(VR):  ' + str(i+1)+'/'+str(repetitions))
+            else:
+                print('simulation 4(VI):  ' + str(i+1)+'/'+str(repetitions))
+            runs = agent.sim_Free_Operant_minute(trials=trials,environment=environment)
+            #runs = agent.sim_Free_Operant_minute(trials=trials,environment=environment)
+            for t in range(trials):
+                runs.run_agent(U, t, VI= VI, VR=VR)
+            worlds_same_train_duration.append(runs)
+        worlds[n] = worlds_same_train_duration
+        return worlds
+  
 
 
 #simulation 4
 
-#worlds_VR = simulation_4_VR(trials_list = [10000], repetitions = 10)
-#anal.plot_4(worlds_VR, repetitions = 10)
+#worlds_VR = simulation_4(trials_list = [10000], repetitions = 5, VR=10)
+#anal.plot_4(worlds_VR, repetitions = 5)
 #worlds_VI = simulation_4_VI()
 #anal.plot_4(worlds_VI, repetitions = 2) 
 
@@ -234,6 +244,10 @@ anal.plot_4(worlds_VR, repetitions = 10)
 
 worlds_VI = simulation_4(trials_list = [10000], repetitions = 10, VI=6)
 anal.plot_4(worlds_VI, repetitions = 10)
+
+
+#worlds_VR_min = simulation_4_min(trials_list = [10000], repetitions = 10, VR=10)
+#anal.plot_4(worlds_VR_min, repetitions = 10)
 
 
 
