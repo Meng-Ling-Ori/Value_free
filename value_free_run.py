@@ -11,8 +11,6 @@ import analysis_and_plot as anal
 
 np.set_printoptions(threshold = 100000, precision = 5)
 
-#1. 模拟2和模拟3的press的概率随着training duration的增加不会逐渐增加到1 最多到0.8
-#2. 模拟4的计算 h始终值很小，g始终值很大，press rate（动作(a:0-150)选择概率）增加得非常快。
 
 # Here are functions to run simulations and plot results.
 # the class from 'Value_Free_Model': to implement all steps of value upload and action selection
@@ -201,8 +199,7 @@ def simulation_4_min(trials_list,repetitions,omission=False, devaluation=False, 
 
 #worlds_VR = simulation_4(trials_list = [10000], repetitions = 5, VR=10)
 #anal.plot_4(worlds_VR, repetitions = 5)
-#worlds_VI = simulation_4_VI()
-#anal.plot_4(worlds_VI, repetitions = 2) 
+
 
 #%%
 """
