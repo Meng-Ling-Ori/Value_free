@@ -252,7 +252,7 @@ def plot_4(worlds, repetitions):
     ax1.set_yticks([-10,0,10,20,30])
     ax1.set_xlim([0,worlds[0][0].n_action_rate])
     ax1.set_xticks([0,worlds[0][0].n_action_rate/3,worlds[0][0].n_action_rate/1.5,worlds[0][0].n_action_rate])
-    ax1.legend()
+    ax1.legend(loc = 'upper left')
     if worlds[0][0].free_parameters['VR'] != None:
         ax1.set_title('Variable Ratio')
     else:
@@ -275,8 +275,8 @@ def plot_4(worlds, repetitions):
     gs = np.mean([worlds[0][i].gs for i in range(repetitions)], axis=0)
     ax3 = plt.subplot2grid((6, 1), (3, 0))
     ax3.plot(gs, color='green')
-    ax3.set_ylim([0,1])
-    ax3.set_yticks([0,0.5,1])
+    ax3.set_ylim([0,5])
+    ax3.set_yticks([0,1,2,3,4,5])
     ax3.set_xlim([0,10000])
     ax3.set_xticks([0,2000,4000,6000,8000,10000])
     ax3.set_title('action-outcome contingency(g)')
@@ -303,16 +303,4 @@ def plot_4(worlds, repetitions):
     ax5.set_title('weight of goal-directed control(w)')
     
     plt.tight_layout()
-    plt.show()    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
-    
+    plt.show()
