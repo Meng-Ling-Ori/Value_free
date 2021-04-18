@@ -56,9 +56,9 @@ class sim_two_alternative(object):
         
         if devaluation:
             if t <= (trials_phase1-1) or t >= trials_phase2 + trials_phase1:
-                U = U[0]
+                U = [0, 1.0, 0.1]
             else:
-                U = U[1]
+                U = [0,   0, 0.1]
         
         if t == 0:
             self.set_initial()
@@ -138,7 +138,7 @@ class sim_two_alternative(object):
 
 class sim_Free_Operant_second(object):
     def __init__(self, trials, environment, trials_test = 500, 
-                 actions_list=np.arange(0,150,1),
+                 actions_list=np.arange(0,150,2),
                  nm=3, na=2, ni_R=4, ni_H = 30,
                  alpha_H=10**(-5), alpha_R=10**(-1), 
                  w_g=6, w_h=15, w_0=1, theta_g=20, theta_h=10**3): 
@@ -164,12 +164,12 @@ class sim_Free_Operant_second(object):
         self.gs = np.zeros((trials))
         self.hs = np.zeros((trials)) 
         self.weights = np.zeros((trials))
-        self.actions = np.zeros((trials,4), dtype = int) # the number of press within one second
+        self.actions = np.zeros((trials,21), dtype = int) # the number of press within one second
             # with the max rate is 150 and with uniform speed, the max number of press is 3  
         self.action_rate  = np.zeros(trials)
         self.rate_effort_true = 2*(10**(-3))*actions_list + 6*(10**(-4))*(actions_list)**2 # for effort 
-        self.reinforcers = np.zeros((trials,nm-1))
-        self.reinforcers_rate = np.zeros((trials,nm-1)) # the rates of getting pellet or non-rewards of each trial
+        self.reinforcers = np.zeros((trials,nm))
+        self.reinforcers_rate = np.zeros((trials,nm)) # the rates of getting pellet or non-rewards or effort of each trial
         self.effort_rate = np.zeros(trials) # the rates of effort of each trial(=action)
 
 
@@ -205,9 +205,9 @@ class sim_Free_Operant_second(object):
         
         if devaluation:
             if t < self.trials - self.trials_test:
-                U = U[0]
+                U = [0.1,1,-1]
             else:
-                U = U[1]        
+                U = [0.1,0,-1]       
  
         if t == 0:
             self.set_initial()
@@ -221,20 +221,18 @@ class sim_Free_Operant_second(object):
         self.update_pi_a(t) #actions rate selection probability
         
         self.action_rate_selection(t) #select actions rate according to the probability
-        self.action_selection(t) #select action accroding to the actions rate
+#        self.action_selection(t) #select action accroding to the actions rate
+        self.action_selection_poisson(t)
+        
+        self.effort_rate[t] = self.env.obtained_effort(t,self.action_rate[t]) #/60
     
-        reinforcer,number_of_reinforcer = self.env.obtained_reinforcement(t,self.actions[t],VR,VI,omission) #obtained reinforcer
-        self.reinforcers[t,reinforcer] = number_of_reinforcer
-#        self.reinforcers[t,1] = 0.1 * self.action_rate[t]
-        self.reinforcers_rate[t] = self.reinforcers[t] *60
+        reinforcer = self.env.obtained_reinforcement(t,self.actions[t],VR,VI,omission) #obtained reinforcer
+        self.reinforcers[t] = reinforcer
+               
+        self.reinforcers_rate[t] = self.reinforcers[t]
+        self.reinforcers_rate[t,1:3] *=60# the reinforcers rate of leisure keep 1
         
-        self.effort_rate[t] = self.env.obtained_effort(t,self.action_rate[t]) 
-        
-#        self.reinforcers_rate[t] = self.reinforcers[t] * 60
-        
-#        self.effort_rate[t] = self.env.obtained_effort(t,self.action_rate[t]) #/60
-        
-        self.env.obtained_rewrads(t,U)
+#        self.env.obtained_rewrads(t,U)
         
       
     def set_initial(self):
@@ -243,10 +241,10 @@ class sim_Free_Operant_second(object):
         self.Q = np.zeros((self.trials,self.n_action_rate)) 
 
     def update_habitual_system(self,t):
-        tau = np.where(self.actions_list == self.action_rate[t-1])[0] #the position of the selected actions rate
-        self.c_t[t] = self.c_t[t-1] + self.alpha_H * ( 1 - self.H[t-1,tau]) * self.chi[:,tau].T \
+        tau = np.where(self.actions_list == self.action_rate[t-1])[0][0] #the position of the selected actions rate
+        self.c_t[t] = self.c_t[t-1] + self.alpha_H * ( 1 - self.H[t-1,tau]) * self.chi[:,tau] \
                                     + self.alpha_H * np.sum(( 0 - self.H[t-1]) * self.chi,axis=1) \
-                                    - self.alpha_H * ( 0 - self.H[t-1,tau]) * self.chi[:,tau].T
+                                    - self.alpha_H * ( 0 - self.H[t-1,tau]) * self.chi[:,tau]
 #        for i in range(self.ni_H):
 #            for j in range(self.n_action_rate):
 #                if j == tau:
@@ -257,9 +255,9 @@ class sim_Free_Operant_second(object):
         #c_t:(trials,ni_H) ; chi(ni_H,n_action_rate)
             
     def update_goal_directed_system(self,t,U):
-        tau = np.where(self.actions_list == self.action_rate[t-1])[0] #the position of the selected actions rate
+        tau = np.where(self.actions_list == self.action_rate[t-1])[0][0] #the position of the selected actions rate
                        
-        r_t = [self.reinforcers_rate[t-1,0], self.reinforcers_rate[t-1,1], self.effort_rate[t-1]]
+        r_t = self.reinforcers_rate[t-1]
         self.b_t[t] = self.b_t[t-1] + self.alpha_R * ((r_t - self.R[t-1,tau]).reshape(self.nm,1) * self.phi[:,tau].reshape(1,self.ni_R))
 
 #        for i in range(self.ni_R):
@@ -267,7 +265,6 @@ class sim_Free_Operant_second(object):
 #                self.b_t[t,k,i] += self.alpha_R*(r_t[k] - self.R[t-1,tau,k])*self.phi[i,tau]
 
         self.R[t] = np.dot(self.b_t[t],self.phi).T 
-        R_60 = self.R[t] * 60
         self.Q[t] = np.dot(self.R[t], np.array(U))
 #        self.Q[t] = np.dot(R_60, np.array(U))
                 
@@ -276,7 +273,6 @@ class sim_Free_Operant_second(object):
         if t == 0:
             self.gs[t] = 0
         else:
-            R_60 = self.R[t] * 60
             self.gs[t] = np.sqrt(np.sum(self.P[t-1]*(self.R[t,:,1] - np.sum(self.P[t-1]*self.R[t,:,1]))**2))
 #            self.gs[t] = np.sqrt(np.sum(self.P[t-1]*(R_60[:,1] - np.sum(self.P[t-1]*R_60[:,1]))**2))
         self.hs[t] = np.sqrt(np.sum((self.H[t] - np.mean(self.H[t]))**2))
@@ -315,10 +311,21 @@ class sim_Free_Operant_second(object):
             p_press[0] = 1-self.action_rate[t] / 60
             p_press[1] = self.action_rate[t] / 60
         
-        for press_time in range(4):
-            action = np.random.choice(range(4), p = p_press)
+        
+        action = np.random.choice(range(4), p = p_press)
         self.actions[t,action] = 1
         
+    def action_selection_poisson(self,t):
+        max_press = 20+1  # assume the range of press number within a second is 0-20
+        p_press = np.zeros(max_press) # probability of pressing number
+        avg_a = self.action_rate[t] / 60 # average press number within one second
+        for i in range(max_press):
+            p_press[i] = ((avg_a**i)/np.math.factorial(i) ) * np.exp(-avg_a)
+            
+        action = np.random.choice(range(max_press), p = p_press)
+        self.actions[t,action] = 1
+
+
 
 class sim_Free_Operant_minute(object):
     def __init__(self, trials, environment, 
@@ -401,7 +408,8 @@ class sim_Free_Operant_minute(object):
 #        reinforcer,number_of_reinforcer = self.obtained_reinforcement(t,self.action_rate[t],VR,VI) #obtained reinforcer
 #        self.reinforcers[t,reinforcer] = number_of_reinforcer
         
-        self.reinforcers_rate[t,1] = 0.1 * self.action_rate[t]
+        self.obtained_reinforcement(t,self.action_rate[t],VR,VI)
+        self.reinforcers_rate[t] = self.reinforcers[t]
         
         self.effort_rate[t] = self.obtained_effort(t,self.action_rate[t])
         
@@ -490,10 +498,11 @@ class sim_Free_Operant_minute(object):
     
     def obtained_rewrads(self,t,U):
         ### obtained rewards
-        self.rewards[t] = U[1]*self.reinforcers[t,1] + U[2]*self.effort_rate[t]        
-
-
-
-
-
+        self.rewards[t] = U[1]*self.reinforcers[t,1] + U[2]*self.effort_rate[t]       
         
+        
+#class sim_two_armedbandit(object):
+#    def __init__(self, trials, environment):
+        
+        
+#    def run_agent(self,):
