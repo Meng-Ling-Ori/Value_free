@@ -87,3 +87,40 @@ class environment_free_operant(object):
     def obtained_rewrads(self,t,U):
         ### obtained rewards
         self.rewards[t] = U[1]*self.reinforcers[t,1] + U[2]*self.effort_rate[t]
+            
+        
+class environment_two_armedbandit(object):
+    def __init__(self,trials,nm=2,na=2):
+        
+        self.nm = nm        
+        self.reinforcers = np.zeros((trials), dtype = int)
+        self.p_reinforcer = np.zeros((trials,na))
+        
+    def obtained_reinforcement(self,t,action):
+        if t == 0:
+            self.reset_p_reinforcer()
+        else:
+            self.update_p_reinforcer(t)
+        p1 = self.p_reinforcer[t,action]
+        reinforcer = np.random.choice(range(self.nm), p = [1-p1,p1])
+        self.reinforcers[t] = reinforcer        
+        return reinforcer
+    
+    def reset_p_reinforcer(self):
+        p0 = 0.5
+        self.p_reinforcer[0] =[p0,p0]# initial probabilities of reinforcer after action1,action2
+        
+    def update_p_reinforcer(self,t):
+        p_change = np.random.normal(0,0.15,2) # probabilities of reinforcer after action1 and action2
+        p = self.p_reinforcer[t-1] + p_change
+        p[np.where(p>1)[0]] = 1 # bounded at 0 and 1
+        p[np.where(p<0)[0]] = 0
+            
+        self.p_reinforcer[t] = p
+        
+
+        
+        
+        
+        
+        
