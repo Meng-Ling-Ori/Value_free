@@ -326,6 +326,175 @@ class sim_Free_Operant_second(object):
         self.actions[t,action] = 1
 
 
+class sim_two_armedbandit_MF(object):
+    def __init__(self, trials, environment,\
+                 alpha_MF, alpha_MB,theta_MB,theta_MF,w,\
+                 na=2, nm=2, ):
+        self.env = environment
+        self.na = na
+        self.nm = nm
+        self.trials = trials
+        
+        self.alpha_MF = alpha_MF
+        self.alpha_MB = alpha_MB
+        self.theta_MB = theta_MB
+        self.theta_MF = theta_MF
+        self.w = w
+        
+        self.H = np.zeros((trials,na))
+        self.Q = np.zeros((trials,na))
+        self.D = np.zeros((trials,na))
+        self.P = np.zeros((trials,na))
+        
+        self.action = np.zeros((trials,na), dtype = int)
+        self.reinforcer = np.zeros((trials,nm), dtype = int)
+        self.free_parameters = {'alpha_MF': alpha_MF,'alpha_MB':alpha_MB,'theta_MB':theta_MB,'theta_MF':theta_MF,'w':w}
+        
+        
+        
+        
+    def run_agent(self,current_trial):
+        t = current_trial 
+        if t == 0:
+            self.set_initial()
+        else:
+            self.update_habitual_system(t) # H
+        
+            self.update_goal_directed_system(t)  # Q
+        
+
+        self.update_overall_driver(t) # D
+        
+        self.update_pi_a(t) #actions probability update
+        
+        action = self.action_selection(t) # choose action
+        
+        reinforcer = self.env.obtained_reinforcement(t,action)  
+        self.reinforcer[t,reinforcer] = 1           
+        
+    def set_initial(self):
+        self.H = np.zeros((self.trials,self.na)) 
+        self.Q = np.zeros((self.trials,self.na))
+    
+    def update_habitual_system(self,t):
+        a = np.where(self.action[t-1]==1)[0]
+        r_t = np.where(self.reinforcer[t-1]==1)[0]
+        self.H[t] = self.H[t-1]
+        self.H[t,a] = self.H[t-1,a] + self.alpha_MF * (r_t - self.H[t-1,a])
+    
+    def update_goal_directed_system(self,t):
+        a = np.where(self.action[t-1]==1)[0]
+        r_t = np.where(self.reinforcer[t-1]==1)[0]
+        self.Q[t] = self.Q[t-1]
+        self.Q[t,a] = self.Q[t-1,a] + self.alpha_MB * (r_t - self.Q[t-1,a])
+
+    def update_overall_driver(self,t):
+        w = self.w
+        theta_MF = self.theta_MF
+        theta_MB = self.theta_MB
+        self.D[t] = w * theta_MF * self.H[t] + (1-w) * theta_MB * self.Q[t]
+        
+    def update_pi_a(self,t):
+        self.P[t] = np.array([np.exp(self.D[t,i])/sum(np.exp(self.D[t,:])) for i in range(self.na)])
+
+    def action_selection(self,t):
+        action = np.random.choice(range(self.na), p = self.P[t])
+        self.action[t,action] = 1 
+        return action
+    
+class sim_two_armedbandit_per(object):
+    def __init__(self, trials, environment,\
+                 alpha_H, alpha_R,theta_h,theta_g,w_h,w_g,w_0,\
+                 na=2, nm=2, ):
+        self.env = environment
+        self.na = na
+        self.nm = nm
+        self.trials = trials
+        
+        self.H = np.zeros((trials,na)) #habitual strength
+        self.R = np.zeros((trials,na,nm)) #expectation of reinforcers after action
+        self.Q = np.zeros((trials,na)) #expectation value of action 
+        self.D = np.zeros((trials,na)) #overall drive
+        self.P = np.zeros((trials,na)) #pi(a)
+        
+        self.gs = np.zeros((trials)) #action-outcome contingency(here only consider m_1)
+        self.hs = np.zeros((trials)) #overall habitization
+        self.weights = np.zeros((trials))
+        self.action = np.zeros((trials,na), dtype = int)
+        self.reinforcer = np.zeros((trials,nm), dtype = int)
+        
+        self.alpha_H = alpha_H
+        self.alpha_R = alpha_R
+        self.w_g = w_g # scaling parameter controlling the relatice strength of the goal-directed system
+        self.w_h = w_h # scaling parameter controlling the relatice strength of the habitual system
+        self.w_0 = w_0 # bias parameter
+        self.theta_g = theta_g #step-size parameter, which determines the rate of change(habitual strength)
+        self.theta_h = theta_h #step-size parameter, determines the rate of change(expectation of reinforcers)
+
+        self.free_parameters = {'alpha_H': alpha_H,'alpha_R':alpha_R,'theta_h':theta_h,'theta_g':theta_h,'w_h':w_h,'w_g':w_g,'w_0':w_0}
+        
+    def run_agent(self,current_trial,U):
+        t = current_trial 
+        if t == 0:
+            self.set_initial()
+        else:
+            self.update_habitual_system(t) # H
+        
+            self.update_goal_directed_system(t,U)  # R,Q
+        
+        self.update_arbiter(t) # g,h,w,D
+        
+        self.update_pi_a(t) #action selection probability
+        
+        
+        action = self.action_selection(t) # choose action
+        
+        reinforcer = self.env.obtained_reinforcement(t,action)  
+        self.reinforcer[t,reinforcer] = 1           
+        
+    def set_initial(self):
+        self.H = np.zeros((self.trials,self.na))
+        self.R = np.zeros((self.trials,self.na,self.nm))
+        self.Q = np.zeros((self.trials,self.na))
+    
+    def update_habitual_system(self,t):
+        a_t = self.action[t-1]        
+        self.H[t,:] = self.H[t-1,:] + self.alpha_H*(a_t - self.H[t-1,:])  
+    
+    def update_goal_directed_system(self,t,U):
+        r_t = self.reinforcer[t-1]
+        a = np.where(self.action[t-1]==1)[0]
+        self.R[t] = self.R[t-1]
+        self.R[t,a] = self.R[t-1,a] + self.alpha_R*(r_t - self.R[t-1,a])
+        self.Q[t] = np.sum([U[i]*self.R[t,:,i] for i in range(self.nm)], axis = 0)
+
+    def update_arbiter(self,t):
+        if t == 0:
+            self.gs[t] = 0
+        else:
+            self.gs[t] = np.sqrt(sum(self.P[t-1,i]*(self.R[t,i,1] \
+                            - sum(self.P[t-1,j]*self.R[t,j,1] for j in range(self.na)))**2 for i in range(self.na)))
+        
+        #overall habitization
+        self.hs[t] = np.sqrt(sum((self.H[t,i] - np.mean(self.H[t,:]))**2 for i in range(self.na)))
+    
+        #weight of habitual system
+        self.weights[t] = 1/(1 + np.exp(self.w_g * self.gs[t] - self.w_h * self.hs[t] + self.w_0))
+    
+        #overall drive
+        w = self.weights[t]
+        self.D[t] = w * self.theta_h * self.H[t] + (1-w) * self.theta_g * self.Q[t]
+        
+    def update_pi_a(self,t):
+        self.P[t] = np.array([np.exp(self.D[t,i])/sum(np.exp(self.D[t,:])) for i in range(self.na)])
+
+    def action_selection(self,t):
+        action = np.random.choice(range(self.na), p = self.P[t])
+        self.action[t,action] = 1 
+        return action
+
+
+#%%
 
 class sim_Free_Operant_minute(object):
     def __init__(self, trials, environment, 
@@ -501,8 +670,6 @@ class sim_Free_Operant_minute(object):
         self.rewards[t] = U[1]*self.reinforcers[t,1] + U[2]*self.effort_rate[t]       
         
         
-#class sim_two_armedbandit(object):
-#    def __init__(self, trials, environment):
+
+
         
-        
-#    def run_agent(self,):
