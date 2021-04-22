@@ -7,6 +7,9 @@ Created on Wed Mar 31 22:03:10 2021
 import numpy as np
 import matplotlib.pylab as plt
 from scipy.signal import savgol_filter
+import scipy as sc
+from value_free_misc import logistic_repression_model as lrm
+from value_free_misc import logit
 
 def plot_1(worlds, repetitions):
     na = worlds[0].na
@@ -303,4 +306,101 @@ def plot_4(worlds, repetitions):
     ax5.set_title('weight of goal-directed control(w)')
     
     plt.tight_layout()
+    plt.show()        
+    
+def plot_5(worlds, repetitions, MF=False):
+    trials = worlds[0][0].trials
+    lag_trials = 10
+    
+    beta_list = np.zeros(((len(worlds)*repetitions),lag_trials*3+1))
+
+    for k in range(len(worlds)):
+        if k % 10 == 0: 
+            print(k)
+        for i in range(repetitions):
+            a1_list = np.zeros((lag_trials,trials-1000))
+            a2_list = np.zeros((lag_trials,trials-1000))
+            r_list = np.zeros((lag_trials,trials-1000))
+            y = np.zeros((trials-1000))
+            for t in range(1000,trials):
+                a1_list[:,t-1000] = worlds[k][i].action[t-lag_trials:t, 1] # action a_t
+                a2_list[:,t-1000] = worlds[k][i].action[t-lag_trials:t, 0] # action a_t
+                r_list[:,t-1000] = worlds[k][i].reinforcer[t-lag_trials:t, 1] # reinforcer r_t
+                y[t-1000] = logit(worlds[k][i].P[t,1])
+
+            p0 = np.zeros(lag_trials*3 + 1)
+            beta_list[k*repetitions+i],pcov = sc.optimize.curve_fit(lrm, (a1_list,a2_list,r_list), y, p0 )
+            
+#            if len(np.where(beta_list[k*repetitions+i] > 5)[0]) or len(np.where(beta_list[k*repetitions+i] < -5)[0]):
+#                beta_list[k*repetitions+i] = np.zeros(lag_trials*5 + 1) 
+                
+#    beta_list = np.nan_to_num(beta_list)    
+    beta_a = beta_list[:,:lag_trials]
+#    beta_a2 = beta_list[:,lag_trials*3:lag_trials*4]
+#    beta_a = beta_a1+beta_a2
+    beta_r = beta_list[:,lag_trials:lag_trials*2]
+    beta_x = beta_list[:,lag_trials*2:lag_trials*3]
+    beta_0 = beta_list[:,-1]
+
+    plt.figure(figsize= (8,6))
+    if MF:
+        plt.suptitle('MF/MB agent')    
+    else:
+        plt.suptitle('MB/Perseverate agent')
+    
+    #reinforcement sensitivity
+    ax1 = plt.subplot2grid((2, 3), (0, 0))
+    ax1.plot(np.mean(beta_x,axis=0), color='blue') 
+    ax1.axhline(y=0, color='grey', linestyle='--')
+    ax1.set_title("reinforcement sensitivity")
+    ax1.set_xlabel('Lag(trials)')
+    ax1.set_ylabel('Regression Weights')
+    ax1.set_xlim([-2,11])
+    ax1.set_ylim([-0.25,1.2])
+    ax1.set_xticks([0,4,9])
+    ax1.set_xticklabels(['1','5','10'])
+    ax1.set_yticks([0,0.5,1])
+    
+    #choice sensitivity
+    ax2 = plt.subplot2grid((2, 3), (0, 1))
+    ax2.plot(np.mean(beta_a,axis=0), color='blue') 
+    ax2.axhline(y=0, color='grey', linestyle='--')
+    ax2.set_title("choice sensitivity")
+    ax2.set_xlabel('Lag(trials)')
+    ax2.set_ylabel('Regression Weights')
+    ax2.set_xlim([-2,11])
+    ax2.set_ylim([-0.25,1.2])
+    ax2.set_xticks([0,4,9])
+    ax2.set_xticklabels(['1','5','10'])
+    ax2.set_yticks([0,0.5,1])    
+
+    # total weights
+    total_beta_a = np.zeros((len(worlds)))
+    total_beta_x = np.zeros((len(worlds)))
+    for i in range(len(worlds)):
+        total_beta_a[i] = np.sum(beta_a[i*repetitions:(i+1)*repetitions]) / repetitions
+        total_beta_x[i] = np.sum(beta_x[i*repetitions:(i+1)*repetitions]) / repetitions
+    ax3 = plt.subplot2grid((2, 3), (0, 2))
+    ax3.scatter(x=total_beta_x,y=total_beta_a, s = 0.6)
+    ax3.plot([0,1,2,3,4],[0,1,2,3,4],color='black',linewidth=0.5)
+    ax3.set_xlabel('Total Reinforcer Weight')
+    ax3.set_ylabel('Total Choice Weight')
+    ax3.set_xlim([0,4.2])
+    ax3.set_ylim([0,4.2])
+    ax3.set_xticks([0,1,2,3,4])
+    ax3.set_yticks([0,1,2,3,4])
+    
+    ax4 = plt.subplot2grid((2, 3), (1, 0), colspan=3)
+    
+    ax4.set_title('smoothed p_reinforcer(middle parameters)')
+    P = worlds[int(len(worlds)/2)][0].env.p_reinforcer
+    P[:,0] = savgol_filter(P[:,0], 99, 2, mode= 'nearest')
+    P[:,1] = savgol_filter(P[:,1], 99, 2, mode= 'nearest')
+    ax4.plot(P)
+
+
+    plt.tight_layout()
     plt.show()
+    
+    
+    return beta_list
