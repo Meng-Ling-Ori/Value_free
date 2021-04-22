@@ -8,9 +8,13 @@ import numpy as np
 import value_free_environment as env
 import value_free_agent as agent
 import analysis_and_plot as anal
+from multiprocessing.pool import Pool
+from functools import reduce
 
 np.set_printoptions(threshold = 100000, precision = 5)
 
+#1. 模拟2和模拟3的press的概率随着training duration的增加不会逐渐增加到1 最多到0.8
+#2. 模拟4的计算 h始终值很小，g始终值很大，press rate（动作(a:0-150)选择概率）增加得非常快。
 
 # Here are functions to run simulations and plot results.
 # the class from 'Value_Free_Model': to implement all steps of value upload and action selection
@@ -169,6 +173,132 @@ def simulation_4(trials_list,repetitions,omission=False, devaluation=False, VI =
 #worlds_VR = simulation_4_VR()
 #anal.plot_4(worlds_VR, repetitions = 2) 
 
+
+def simulation_5_MF_MB(trials, repetitions):
+    # two armed bandit task
+    environment = env.environment_two_armedbandit(trials) 
+    alpha_MF_list = np.arange(0.2,1,0.1) # 0.2-1 #model free
+    alpha_MB_list = np.arange(0.2,1,0.1) #0.2-1 #model based
+    theta_MF_list = np.arange(0,10,0.1) #0-10
+    theta_MB_list = np.arange(0,10,0.1) #0-10
+    w_list = np.arange(0,1,0.1) #0-1
+    
+    test_number = 200
+    worlds = [[] for i in range(test_number)]
+    par_list = np.zeros((test_number,5))
+    for k in range(test_number):
+        par_list[k] = [np.random.choice(alpha_MF_list), np.random.choice(alpha_MB_list), \
+            np.random.choice(theta_MB_list),np.random.choice(theta_MF_list),np.random.choice(w_list)]
+        
+        print('simulation 5 (MF/MB):'+str(k+1)+'/'+str(int(len(worlds))))
+        worlds_same_par = []                                       
+        for i in range(repetitions):
+            runs = agent.sim_two_armedbandit_MF(trials,environment,*par_list[k])
+        
+            for t in range(trials):
+                runs.run_agent(t)                
+            worlds_same_par.append(runs)
+        worlds[k] = worlds_same_par
+    return worlds
+
+def simulation_5_perseverativ(trials, repetitions):
+    # two armed bandit task
+    environment = env.environment_two_armedbandit(trials)
+    alpha_H_list = np.arange(0.5,0.7,0.1) #0.5-0.7
+    alpha_R_list = np.arange(0.5,0.7,0.1) #0.5-0.7
+    theta_h_list = np.arange(1,3,0.1) #1-3
+    theta_g_list = np.arange(3,6,0.1) #3-6
+    w_h_list = np.arange(1,3,0.1) #1-3
+    w_g_list = np.arange(8,12,0.1) #8-12
+    w_0_list = np.arange(1,3,0.1) #1-3
+    
+    U = [0,1]
+    test_number = 50
+    worlds = [[] for i in range(test_number)]
+    par_list = np.zeros((test_number,7))
+    for k in range(test_number):
+        par_list[k] = [np.random.choice(alpha_H_list), np.random.choice(alpha_R_list), \
+            np.random.choice(theta_h_list),np.random.choice(theta_g_list), \
+                np.random.choice(w_h_list),np.random.choice(w_g_list),np.random.choice(w_0_list)]
+        
+        print('simulation 5 (perseverativ):'+str(k+1)+'/'+str(int(len(worlds))))
+        worlds_same_par = []                                       
+        for i in range(repetitions):
+            runs = agent.sim_two_armedbandit_per(trials,environment,*par_list[k])
+                                                         
+            for t in range(trials):
+                runs.run_agent(t,U)                
+            worlds_same_par.append(runs)
+        worlds[k] = worlds_same_par
+    return worlds    
+    
+
+#%%
+def simulation_5_MF_MB_fake(trials, repetitions):
+    # two armed bandit task
+    environment = env.environment_two_armedbandit(trials) 
+    alpha_MF_list = [0.2,0.6,1] # 0.2-1 #model free
+    alpha_MB_list = [0.2,0.6,1] #0.2-1 #model based
+    theta_MF_list = [1,5,9] #0-10
+    theta_MB_list = [1,5,9] #0-10
+    w_list = [0.1,0.5,0.9] #0-1
+    a,b,c,d,e = len(alpha_MB_list), len(alpha_MF_list), len(theta_MB_list), len(theta_MF_list), len(w_list)
+    worlds = [[] for i in range(a*b*c*d*e)]
+    
+    for aMF,alpha_MF in enumerate(alpha_MF_list):
+        for aMB,alpha_MB in enumerate(alpha_MB_list):
+            for thMF,theta_MF in enumerate(theta_MF_list):
+                for thMB,theta_MB in enumerate(theta_MB_list):
+                    for k,w in enumerate(w_list):
+                        worlds_same_par = [] 
+                        print('simulation 5 (MF/MB):'+str(b*c*d*e*aMF+c*d*e*aMB+d*e*thMF+e*thMB+k+1)+'/'+str(int(len(worlds))))
+                                               
+                        for i in range(repetitions):
+                            runs = agent.sim_two_armedbandit_MF(trials,environment,\
+                                         alpha_MF,alpha_MB,theta_MB,theta_MF,w)
+        
+                            for t in range(trials):
+                                runs.run_agent(t)                
+                            worlds_same_par.append(runs)
+                        worlds[(b*c*d*e*aMF+c*d*e*aMB+d*e*thMF+e*thMB+k)] = worlds_same_par
+    return worlds
+
+def simulation_5_perseverativ_fake(trials, repetitions):
+    # two armed bandit task
+    environment = env.environment_two_armedbandit(trials)
+    alpha_H_list = [0.5,0.6,0.7] #0.5-0.7
+    alpha_R_list = [0.5,0.6,0.7] #0.5-0.7
+    theta_h_list = [1,2,3] #1-3
+    theta_g_list = [3,4.5,6] #3-6
+    w_h_list = [1,2,3] #1-3
+    w_g_list = [8,10,12] #8-12
+    w_0_list = [1,2,3] #1-3
+    
+    U = [0,1]
+    a,b,c,d,e,f,g = len(alpha_H_list), len(alpha_R_list), len(theta_h_list), len(theta_g_list), len(w_h_list), len(w_g_list), len(w_0_list)
+    worlds = [[] for i in range(a*b*c*d*e*f*g)]
+    for a1,alpha_H in enumerate(alpha_H_list):
+        for a2,alpha_R in enumerate(alpha_R_list):
+            for th,theta_h in enumerate(theta_h_list):
+                for tg,theta_g in enumerate(theta_g_list):
+                    for wh,w_h in enumerate(w_h_list):
+                        for wg,w_g in enumerate(w_g_list):
+                            for w0,w_0 in enumerate(w_0_list):
+                                worlds_same_par = [] 
+                                print('simulation 5 (perseverativ):'+str(b*c*d*e*f*g*a1+c*d*e*f*g*a2+d*e*f*g*th+e*f*g*tg+f*g*wh+g*wg+w0+1)+'/'+str(int(len(worlds))))
+                                               
+                                for i in range(repetitions):
+                                    runs = agent.sim_two_armedbandit_per(trials,environment,\
+                                         alpha_H, alpha_R,theta_h,theta_g,w_h,w_g,w_0)
+        
+                                    for t in range(trials):
+                                        runs.run_agent(t,U)                
+                                    worlds_same_par.append(runs)
+                                worlds[(b*c*d*e*f*g*a1+c*d*e*f*g*a2+d*e*f*g*th+e*f*g*tg+f*g*wh+g*wg+w0)] = worlds_same_par    
+    return worlds
+
+        
+  
 def simulation_4_min(trials_list,repetitions,omission=False, devaluation=False, VI = None, VR = None):
     #in Variable ration(VR) schedule: the probability of receiving a reinforcer is constant after each lever press
     U = [-1,1]
@@ -192,15 +322,6 @@ def simulation_4_min(trials_list,repetitions,omission=False, devaluation=False, 
             worlds_same_train_duration.append(runs)
         worlds[n] = worlds_same_train_duration
         return worlds
-  
-
-
-#simulation 4
-
-#worlds_VR = simulation_4(trials_list = [10000], repetitions = 5, VR=10)
-#anal.plot_4(worlds_VR, repetitions = 5)
-
-
 #%%
 """
 run
@@ -245,22 +366,35 @@ anal.plot_4(worlds_VI, repetitions = 10)
 
 #worlds_VR_min = simulation_4_min(trials_list = [10000], repetitions = 10, VR=10)
 #anal.plot_4(worlds_VR_min, repetitions = 10)
-
-
-
             
+#%%  
+#simulation 5        
+worlds_MF = simulation_5_MF_MB(trials=10000,repetitions=1)
+
+worlds_per = simulation_5_perseverativ(trials=10000,repetitions=1)
+#%%
+beta_list_MF = anal.plot_5(worlds_MF, repetitions=1,MF=True)
+
+beta_list_per = anal.plot_5(worlds_per, repetitions=1)
 
 
 
 
+#%%
+# to save data
+import pickle
+import numpy as np
 
-
-
-
-
-
-
-
+data = beta_list_per
+# wb save data
+data_output = open('data_beta_per.pkl','wb')
+pickle.dump(data,data_output)
+data_output.close()
+#%%
+# rb load data
+data_input = open('data.pkl','rb')
+read_data = pickle.load(data_input)
+data_input.close()
 
 
 
